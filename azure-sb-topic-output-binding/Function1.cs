@@ -20,7 +20,7 @@ namespace azure_sb_topic_output_binding
 
         [Function(nameof(Function1))]
         [ServiceBusOutput("test-topic", Connection = "CONN")]
-        public async Task<OutputData> Run(
+        public async Task<ServiceBusMessage> Run(
             [ServiceBusTrigger("test-queue", Connection = "CONN")]
             ServiceBusReceivedMessage message,
             ServiceBusMessageActions messageActions,
@@ -31,7 +31,8 @@ namespace azure_sb_topic_output_binding
             _logger.LogInformation("Message Body: {body}", message.Body);
             _logger.LogInformation("Message Content-Type: {contentType}", message.ContentType);
 
-
+            #region This is working but not able to set custom properties
+            /*
             //Following return 
             //Is there any way to set custom properties of this message?
             //Along with custom property, I would also like to set messageProperty contentType to application/json
@@ -42,8 +43,11 @@ namespace azure_sb_topic_output_binding
                 Name = "Test"
             };
             return outputData;
+            */
+            #endregion
 
-
+            #region BrokeredMessage not working
+            /*
             //As per sloution mentioned in below link, I tried to set custom properties but it is not working.
             //https://stackoverflow.com/questions/50457428/custom-message-properties-on-azure-queue-topic-message-from-azure-function
 
@@ -53,8 +57,20 @@ namespace azure_sb_topic_output_binding
             brokeredMessage.Properties.Add("Name", "Test");
             //Injecting  ICollector<BrokeredMessage>  notworking as its always null.
             //collector.Add(brokeredMessage);
+            */
+            #endregion
+
+
+            #region ServiceBusMessage not working
+            ServiceBusMessage serviceBusMessage = new ServiceBusMessage();
+            serviceBusMessage.ContentType = "application/json";
+            serviceBusMessage.ApplicationProperties.Add("ID", 123);
+            serviceBusMessage.ApplicationProperties.Add("Name", "Test");
+            serviceBusMessage.Body = BinaryData.FromString("Test");
+            #endregion
             // Complete the message
             await messageActions.CompleteMessageAsync(message);
+            return serviceBusMessage;
 
 
         }
