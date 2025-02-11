@@ -6,25 +6,27 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using Microsoft.ServiceBus.Messaging;
+using Newtonsoft.Json;
 
 namespace azure_sb_topic_output_binding
 {
     public class Function1
     {
         private readonly ILogger<Function1> _logger;
+        private readonly ServiceBusClient _client;
 
-        public Function1(ILogger<Function1> logger)
+        public Function1(ILogger<Function1> logger, ServiceBusClient client)
         {
             _logger = logger;
+            _client = client;
         }
 
         [Function(nameof(Function1))]
         [ServiceBusOutput("test-topic", Connection = "CONN")]
-        public async Task<ServiceBusMessage> Run(
+        public async Task Run(
             [ServiceBusTrigger("test-queue", Connection = "CONN")]
             ServiceBusReceivedMessage message,
-            ServiceBusMessageActions messageActions,
-            ICollector<BrokeredMessage> collector
+            ServiceBusMessageActions messageActions
             )
         {
             _logger.LogInformation("Message ID: {id}", message.MessageId);
@@ -32,16 +34,16 @@ namespace azure_sb_topic_output_binding
             _logger.LogInformation("Message Content-Type: {contentType}", message.ContentType);
 
             #region This is working but not able to set custom properties
-            /*
-            //Following return 
-            //Is there any way to set custom properties of this message?
-            //Along with custom property, I would also like to set messageProperty contentType to application/json
-
             OutputData outputData = new OutputData
             {
                 ID = 123,
                 Name = "Test"
             };
+            /*
+            //Following return 
+            //Is there any way to set custom properties of this message?
+            //Along with custom property, I would also like to set messageProperty contentType to application/json
+
             return outputData;
             */
             #endregion
@@ -62,15 +64,18 @@ namespace azure_sb_topic_output_binding
 
 
             #region ServiceBusMessage not working
-            ServiceBusMessage serviceBusMessage = new ServiceBusMessage();
+            ServiceBusMessage serviceBusMessage = new ServiceBusMessage(JsonConvert.SerializeObject(outputData))
+            {
+                ContentType = "application/json"
+            };
+
             serviceBusMessage.ContentType = "application/json";
             serviceBusMessage.ApplicationProperties.Add("ID", 123);
             serviceBusMessage.ApplicationProperties.Add("Name", "Test");
-            serviceBusMessage.Body = BinaryData.FromString("Test");
+            var sender = _client.CreateSender("test-topic").SendMessageAsync(serviceBusMessage);
             #endregion
             // Complete the message
             await messageActions.CompleteMessageAsync(message);
-            return serviceBusMessage;
 
 
         }
