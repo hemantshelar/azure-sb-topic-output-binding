@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.WebJobs;
+using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Logging;
 using Microsoft.ServiceBus.Messaging;
 using Newtonsoft.Json;
@@ -14,11 +15,12 @@ namespace azure_sb_topic_output_binding
     {
         private readonly ILogger<Function1> _logger;
         private readonly ServiceBusClient _client;
+        private readonly IAzureClientFactory<ServiceBusSender> _clientFactory;
 
-        public Function1(ILogger<Function1> logger, ServiceBusClient client)
+        public Function1(ILogger<Function1> logger, IAzureClientFactory<ServiceBusSender> sbSender)
         {
             _logger = logger;
-            _client = client;
+            _clientFactory = sbSender;
         }
 
         [Function(nameof(Function1))]
@@ -33,12 +35,13 @@ namespace azure_sb_topic_output_binding
             _logger.LogInformation("Message Body: {body}", message.Body);
             _logger.LogInformation("Message Content-Type: {contentType}", message.ContentType);
 
-            #region This is working but not able to set custom properties
             OutputData outputData = new OutputData
             {
                 ID = 123,
                 Name = "Test"
             };
+
+            #region This is working but not able to set custom properties
             /*
             //Following return 
             //Is there any way to set custom properties of this message?
@@ -62,8 +65,8 @@ namespace azure_sb_topic_output_binding
             */
             #endregion
 
-
             #region ServiceBusMessage not working
+            /*
             ServiceBusMessage serviceBusMessage = new ServiceBusMessage(JsonConvert.SerializeObject(outputData))
             {
                 ContentType = "application/json"
@@ -73,11 +76,21 @@ namespace azure_sb_topic_output_binding
             serviceBusMessage.ApplicationProperties.Add("ID", 123);
             serviceBusMessage.ApplicationProperties.Add("Name", "Test");
             var sender = _client.CreateSender("test-topic").SendMessageAsync(serviceBusMessage);
+            */
             #endregion
+
+            #region Working - Use IAzureClientFactory to send message
+            var topic = _clientFactory.CreateClient("test-topic");
+            var serviceBusMessage = new ServiceBusMessage(JsonConvert.SerializeObject(outputData))
+            {
+                ContentType = "application/json"
+            };
+            serviceBusMessage.ApplicationProperties.Add("ID", 123);
+            await topic.SendMessageAsync(serviceBusMessage);
+            #endregion
+
             // Complete the message
             await messageActions.CompleteMessageAsync(message);
-
-
         }
     }
 }
